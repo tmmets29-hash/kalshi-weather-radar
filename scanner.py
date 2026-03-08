@@ -44,11 +44,30 @@ def get_forecast(url):
 
 def get_kalshi_markets(series):
     try:
-        url = f"https://api.kalshi.com/trade-api/v2/markets?series_ticker={series}"
+        # Step 1: get events for the weather series
+        url = f"https://api.kalshi.com/trade-api/v2/events?series_ticker={series}"
         r = requests.get(url, timeout=15)
         r.raise_for_status()
         data = r.json()
-        return data.get("markets", [])
+
+        events = data.get("events", [])
+        if not events:
+            return []
+
+        markets = []
+
+        # Step 2: fetch markets for each event
+        for e in events:
+            event_ticker = e.get("event_ticker")
+
+            m_url = f"https://api.kalshi.com/trade-api/v2/events/{event_ticker}"
+            m = requests.get(m_url, timeout=15)
+            m.raise_for_status()
+            m_data = m.json()
+
+            markets.extend(m_data.get("markets", []))
+
+        return markets
 
     except Exception:
         return []
@@ -151,7 +170,7 @@ def scan_weather():
             "signal": "NO DATA",
             "suggested_bet": 0,
             "scan_time": scan_time,
-            "notes": "No open NYC high-temp markets were returned by Kalshi",
+            "notes": "Kalshi returned no bucket markets",
         }]
 
     rows.sort(key=lambda x: x["edge"], reverse=True)

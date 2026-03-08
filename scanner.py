@@ -1,32 +1,22 @@
-import json
 import requests
 from datetime import datetime
 from weather_model import bucket_probability, classify_edge, suggested_bet_size
 
 
-CITIES = [
+# NYC weather market series
+KALSHI_SERIES = "KXHIGHNY"
 
-{"name": "Washington DC", "url": "https://api.weather.gov/gridpoints/LWX/97,71/forecast"},
-{"name": "New York", "url": "https://api.weather.gov/gridpoints/OKX/33,35/forecast"},
-{"name": "Chicago", "url": "https://api.weather.gov/gridpoints/LOT/76,73/forecast"},
-{"name": "Dallas", "url": "https://api.weather.gov/gridpoints/FWD/97,58/forecast"},
-{"name": "Phoenix", "url": "https://api.weather.gov/gridpoints/PSR/99,76/forecast"}
-
-]
+# NOAA forecast endpoint
+FORECAST_URL = "https://api.weather.gov/gridpoints/OKX/33,35/forecast"
 
 
-def load_buckets():
-    with open("weather_buckets.json", "r") as f:
-        return json.load(f)
-
-
-def get_forecast_mean(url):
+def get_forecast():
 
     try:
 
         headers = {"User-Agent": "kalshi-weather-radar"}
 
-        r = requests.get(url, headers=headers, timeout=20)
+        r = requests.get(FORECAST_URL, headers=headers, timeout=20)
 
         r.raise_for_status()
 
@@ -34,95 +24,142 @@ def get_forecast_mean(url):
 
         periods = data.get("properties", {}).get("periods", [])
 
-        if not periods:
-            return None, None, "No forecast periods returned"
-
-        day_period = None
-
         for p in periods:
+
             if p.get("isDaytime"):
-                day_period = p
-                break
 
-        if day_period is None:
-            day_period = periods[0]
+                temp = p.get("temperature")
 
-        temp = day_period.get("temperature")
-        name = day_period.get("name", "Forecast")
-        short = day_period.get("shortForecast", "")
+                short = p.get("shortForecast", "")
 
-        if temp is None:
-            return None, None, "No temperature returned"
+                name = p.get("name", "")
 
-        std = 4.0
+                return float(temp), f"{name}: {temp}F, {short}"
 
-        note = f"{name}: {temp}F, {short}"
-
-        return float(temp), std, note
+        return None, "No daytime forecast"
 
     except Exception as e:
 
-        return None, None, str(e)
+        return None, str(e)
+
+
+def get_kalshi_markets():
+
+    try:
+
+        url = f"https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker={KALSHI_SERIES}&status=open"
+
+        r = requests.get(url, timeout=20)
+
+        r.raise_for_status()
+
+        data = r.json()
+
+        return data.get("markets", [])
+
+    except Exception:
+
+        return []
+
+
+def parse_bucket(market_title):
+
+    title = market_title.lower()
+
+    if "or below" in title:
+
+        num = int(title.split()[0])
+
+        return None, num
+
+    if "or above" in title:
+
+        num = int(title.split()[0])
+
+        return num, None
+
+    if "-" in title:
+
+        parts = title.split("-")
+
+        low = int(parts[0])
+
+        high = int(parts[1].split()[0])
+
+        return low, high
+
+    return None, None
 
 
 def scan_weather():
 
+    mean_temp, forecast_note = get_forecast()
+
     scan_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
-    rows = []
-
-    buckets = load_buckets()
-
-    for city in CITIES:
-
-        mean, std, forecast_note = get_forecast_mean(city["url"])
-
-        if mean is None:
-            continue
-
-        for b in buckets:
-
-            low = b.get("low")
-            high = b.get("high")
-            kalshi_prob = float(b.get("kalshi_prob", 0))
-
-            model_prob = bucket_probability(low, high, mean, std)
-
-            edge = model_prob - kalshi_prob
-
-            signal = classify_edge(edge, model_prob)
-
-            suggested_bet = suggested_bet_size(edge, bankroll=1000)
-
-            rows.append({
-
-                "city": city["name"],
-                "bucket": b.get("label", b.get("bucket", "")),
-                "model_prob": round(model_prob * 100, 1),
-                "kalshi_prob": round(kalshi_prob * 100, 1),
-                "edge": round(edge * 100, 1),
-                "signal": signal,
-                "suggested_bet": suggested_bet,
-                "scan_time": scan_time,
-                "notes": forecast_note
-
-            })
-
-    if not rows:
+    if mean_temp is None:
 
         return [{
-
-            "city": "-",
-            "bucket": "No forecast data",
+            "city": "NYC",
+            "bucket": "Forecast error",
             "model_prob": "-",
             "kalshi_prob": "-",
             "edge": "-",
             "signal": "ERROR",
             "suggested_bet": 0,
             "scan_time": scan_time,
-            "notes": "Weather API returned nothing"
-
+            "notes": forecast_note
         }]
+
+    markets = get_kalshi_markets()
+
+    std = 4.0
+
+    rows = []
+
+    for m in markets:
+
+        title = m.get("title", "")
+
+        yes_price = m.get("yes_ask_dollars")
+
+        if yes_price is None:
+
+            continue
+
+        low, high = parse_bucket(title)
+
+        model_prob = bucket_probability(low, high, mean_temp, std)
+
+        kalshi_prob = float(yes_price)
+
+        edge = model_prob - kalshi_prob
+
+        signal = classify_edge(edge, model_prob)
+
+        bet_size = suggested_bet_size(edge)
+
+        rows.append({
+
+            "city": "New York",
+
+            "bucket": title,
+
+            "model_prob": round(model_prob * 100, 1),
+
+            "kalshi_prob": round(kalshi_prob * 100, 1),
+
+            "edge": round(edge * 100, 1),
+
+            "signal": signal,
+
+            "suggested_bet": bet_size,
+
+            "scan_time": scan_time,
+
+            "notes": forecast_note
+
+        })
 
     rank = {"OBVIOUS BET": 4, "BET": 3, "WATCH": 2, "PASS": 1}
 

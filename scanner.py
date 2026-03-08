@@ -41,7 +41,7 @@ def get_forecast_mean():
             return None, None, "No temperature in forecast"
 
         # simple starter uncertainty
-        std = 2.0
+        std = 4.0
 
         note = f"{name}: {temp}F, {short}"
         return float(temp), std, note

@@ -6,25 +6,31 @@ CITY = {
     "series": "KXHIGHNY"
 }
 
-BASE_URL = "https://api.elections.kalshi.com"
+BASE_URL = "https://trading-api.kalshi.com/trade-api/v2"
+
+HEADERS = {
+    "User-Agent": "kalshi-weather-radar"
+}
 
 
 def get_kalshi_markets(series):
     try:
-        url = f"{BASE_URL}/trade-api/v2/markets"
 
-        r = requests.get(url, timeout=15)
+        url = f"{BASE_URL}/markets?limit=1000"
+
+        r = requests.get(url, headers=HEADERS, timeout=15)
         r.raise_for_status()
 
         data = r.json()
+
         markets = data.get("markets", [])
 
-        weather_markets = [
+        weather = [
             m for m in markets
             if m.get("ticker", "").startswith(series)
         ]
 
-        return weather_markets
+        return weather
 
     except Exception as e:
         return [{"title": f"API ERROR: {str(e)}"}]
@@ -38,7 +44,7 @@ def scan_weather():
 
     rows = []
 
-    for m in markets[:20]:
+    for m in markets:
 
         title = m.get("title", "NO TITLE")
 
@@ -61,6 +67,7 @@ def scan_weather():
         })
 
     if not rows:
+
         rows.append({
             "city": CITY["name"],
             "bucket": "No weather markets found",

@@ -1,95 +1,77 @@
 import math
 
-
+# Normal distribution helper
 def normal_cdf(x, mean, std):
+    z = (x - mean) / std
+    return 0.5 * (1 + math.erf(z / math.sqrt(2)))
 
-    if std <= 0:
-        return 1.0 if x >= mean else 0.0
 
-    z = (x - mean) / (std * math.sqrt(2))
+# Historical forecast bias by city
+CITY_BIAS = {
+    "New York": -0.8,
+    "Washington DC": -0.5,
+    "Chicago": -1.2,
+    "Dallas": -0.3,
+    "Phoenix": 0.4
+}
 
-    return 0.5 * (1 + math.erf(z))
+
+# Forecast volatility by city
+CITY_STD = {
+    "New York": 4,
+    "Washington DC": 4,
+    "Chicago": 5,
+    "Dallas": 4.5,
+    "Phoenix": 2.5
+}
+
+
+def adjusted_temperature(city, forecast_temp):
+    bias = CITY_BIAS.get(city, 0)
+    return forecast_temp + bias
+
+
+def temperature_std(city):
+    return CITY_STD.get(city, 4)
 
 
 def bucket_probability(low, high, mean, std):
 
-    if low is None and high is None:
-        return 0.0
-
     if low is None:
-        return normal_cdf(high + 0.5, mean, std)
+        return normal_cdf(high, mean, std)
 
     if high is None:
-        return 1 - normal_cdf(low - 0.5, mean, std)
+        return 1 - normal_cdf(low, mean, std)
 
-    upper = normal_cdf(high + 0.5, mean, std)
-    lower = normal_cdf(low - 0.5, mean, std)
-
-    return max(0.0, upper - lower)
-
-
-def expected_value(model_prob, market_prob):
-
-    payout = (1 / market_prob) - 1
-
-    win = model_prob * payout
-    loss = (1 - model_prob)
-
-    ev = win - loss
-
-    return ev
-
-
-def kelly_fraction(model_prob, market_prob):
-
-    b = (1 / market_prob) - 1
-    p = model_prob
-    q = 1 - p
-
-    numerator = (b * p) - q
-
-    if numerator <= 0:
-        return 0
-
-    kelly = numerator / b
-
-    return max(0, kelly)
-
-
-def suggested_bet_size(edge, bankroll=1000):
-
-    # fallback rule if EV not used
-    if edge >= 0.10:
-        return round(bankroll * 0.025, 2)
-
-    if edge >= 0.05:
-        return round(bankroll * 0.01, 2)
-
-    if edge >= 0.03:
-        return round(bankroll * 0.005, 2)
-
-    return 0
-
-
-def suggested_kelly_bet(model_prob, market_prob, bankroll=1000):
-
-    kelly = kelly_fraction(model_prob, market_prob)
-
-    # use quarter Kelly for safety
-    kelly = kelly * 0.25
-
-    return round(bankroll * kelly, 2)
+    return normal_cdf(high, mean, std) - normal_cdf(low, mean, std)
 
 
 def classify_edge(edge, model_prob):
 
-    if edge >= 0.12 and 0.10 < model_prob < 0.90:
+    if edge > 0.15 and model_prob > 0.15:
         return "OBVIOUS BET"
 
-    if edge >= 0.06:
+    if edge > 0.08:
         return "BET"
 
-    if edge >= 0.03:
+    if edge > 0.03:
         return "WATCH"
 
     return "PASS"
+
+
+def suggested_bet_size(edge):
+
+    if edge > 0.20:
+        return 150
+
+    if edge > 0.15:
+        return 100
+
+    if edge > 0.10:
+        return 60
+
+    if edge > 0.05:
+        return 30
+
+    return 0

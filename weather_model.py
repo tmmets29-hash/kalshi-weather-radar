@@ -23,8 +23,8 @@ def bucket_probability(low, high, mean, std):
     return max(0.0, upper - lower)
 
 
-def classify_edge(edge):
-    if edge >= 0.08:
+def classify_edge(edge, model_prob):
+    if edge >= 0.10 and 0.10 < model_prob < 0.90:
         return "OBVIOUS BET"
     if edge >= 0.05:
         return "BET"

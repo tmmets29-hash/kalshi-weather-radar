@@ -15,7 +15,9 @@ BASE_URL = "https://trading-api.kalshi.com"
 PATH = f"/trade-api/v2/markets?series_ticker={CITY['series']}"
 
 KALSHI_API_KEY = os.getenv("KALSHI_API_KEY")
-KALSHI_API_SECRET = os.getenv("KALSHI_API_SECRET")
+
+with open("/etc/secrets/kalshi_private_key.pem", "r") as f:
+    KALSHI_API_SECRET = f.read()
 
 
 def sign_pss_text(private_key_pem: str, message: str) -> str:
@@ -51,9 +53,9 @@ def kalshi_headers(method: str, path: str) -> dict:
 
 
 def get_weather_markets():
-    if not KALSHI_API_KEY or not KALSHI_API_SECRET:
+    if not KALSHI_API_KEY:
         return [{
-            "title": "Missing API credentials",
+            "title": "Missing KALSHI_API_KEY",
             "ticker": "NO TICKER",
         }]
 
@@ -82,6 +84,7 @@ def scan_weather():
 
     for m in markets:
         title = m.get("title", "NO TITLE")
+
         yes_price = (
             m.get("yes_price")
             or m.get("yes_ask")

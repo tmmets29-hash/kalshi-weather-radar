@@ -31,3 +31,13 @@ def classify_edge(edge, model_prob):
     if edge >= 0.03:
         return "WATCH"
     return "PASS"
+
+
+def suggested_bet_size(edge, bankroll=1000):
+    if edge >= 0.10:
+        return round(bankroll * 0.025, 2)
+    if edge >= 0.05:
+        return round(bankroll * 0.01, 2)
+    if edge >= 0.03:
+        return round(bankroll * 0.005, 2)
+    return 0.0

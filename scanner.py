@@ -3,22 +3,28 @@ from datetime import datetime
 
 CITY = {
     "name": "New York",
-    "series": "KXHIGHNY",
+    "series": "KXHIGHNY"
 }
 
-BASE_URL = "https://trading-api.kalshi.com/trade-api/v2"
+BASE_URL = "https://api.elections.kalshi.com"
 
 
 def get_kalshi_markets(series):
     try:
-        url = f"{BASE_URL}/markets?status=open&limit=1000"
-        r = requests.get(url, timeout=20)
-        r.raise_for_status()
-        data = r.json()
+        url = f"{BASE_URL}/trade-api/v2/markets"
 
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+
+        data = r.json()
         markets = data.get("markets", [])
 
-        return [m for m in markets if m.get("ticker", "").startswith(series)]
+        weather_markets = [
+            m for m in markets
+            if m.get("ticker", "").startswith(series)
+        ]
+
+        return weather_markets
 
     except Exception as e:
         return [{"title": f"API ERROR: {str(e)}"}]
@@ -37,9 +43,9 @@ def scan_weather():
         title = m.get("title", "NO TITLE")
 
         yes_price = (
-            m.get("yes_ask_dollars")
-            or m.get("yes_bid_dollars")
-            or m.get("yes_price")
+            m.get("yes_ask")
+            or m.get("yes_bid")
+            or "-"
         )
 
         rows.append({
@@ -51,7 +57,7 @@ def scan_weather():
             "signal": "DEBUG",
             "suggested_bet": 0,
             "scan_time": scan_time,
-            "notes": m.get("ticker", "NO TICKER"),
+            "notes": m.get("ticker", "NO TICKER")
         })
 
     if not rows:
@@ -64,7 +70,7 @@ def scan_weather():
             "signal": "NO DATA",
             "suggested_bet": 0,
             "scan_time": scan_time,
-            "notes": "Kalshi returned no KXHIGHNY markets",
+            "notes": "Kalshi returned no KXHIGHNY markets"
         })
 
     return rows

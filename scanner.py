@@ -14,7 +14,27 @@ CITIES = [
         "name": "Washington DC",
         "series": "KXHIGHDC",
         "forecast": "https://api.weather.gov/gridpoints/LWX/97,71/forecast",
-    }
+    },
+    {
+        "name": "New York",
+        "series": "KXHIGHNY",
+        "forecast": "https://api.weather.gov/gridpoints/OKX/33,35/forecast",
+    },
+    {
+        "name": "Chicago",
+        "series": "KXHIGHCHI",
+        "forecast": "https://api.weather.gov/gridpoints/LOT/76,73/forecast",
+    },
+    {
+        "name": "Dallas",
+        "series": "KXHIGHDAL",
+        "forecast": "https://api.weather.gov/gridpoints/FWD/97,58/forecast",
+    },
+    {
+        "name": "Phoenix",
+        "series": "KXHIGHPHX",
+        "forecast": "https://api.weather.gov/gridpoints/PSR/99,76/forecast",
+    },
 ]
 
 
@@ -27,10 +47,10 @@ def get_forecast(url):
         periods = data["properties"]["periods"]
 
         for p in periods:
-            if p["isDaytime"]:
-                temp = p["temperature"]
-                forecast = p["shortForecast"]
-                name = p["name"]
+            if p.get("isDaytime"):
+                temp = p.get("temperature")
+                forecast = p.get("shortForecast", "")
+                name = p.get("name", "")
 
                 if temp is None:
                     return None, "No temperature"
@@ -50,7 +70,10 @@ def get_kalshi_markets(series):
         r.raise_for_status()
         data = r.json()
         markets = data.get("markets", [])
-        return [m for m in markets if m.get("series_ticker") == series]
+
+        # Match by ticker prefix, which is more reliable than exact series_ticker
+        return [m for m in markets if series in m.get("ticker", "")]
+
     except Exception:
         return []
 
@@ -105,6 +128,7 @@ def scan_weather():
             if yes_price is None:
                 continue
 
+            # Handle old cent-based format if it appears
             if isinstance(yes_price, (int, float)) and yes_price > 1:
                 yes_price = float(yes_price) / 100.0
 
@@ -149,5 +173,17 @@ def scan_weather():
             }
         ]
 
-    best = max(rows, key=lambda x: x["edge"])
-    return [best]
+    # Best bet per city
+    best_by_city = {}
+
+    for row in rows:
+        city = row["city"]
+        current = best_by_city.get(city)
+
+        if current is None or row["edge"] > current["edge"]:
+            best_by_city[city] = row
+
+    final_rows = list(best_by_city.values())
+    final_rows.sort(key=lambda x: x["edge"], reverse=True)
+
+    return final_rows

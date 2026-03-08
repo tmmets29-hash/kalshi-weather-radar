@@ -1,6 +1,7 @@
 import json
 import requests
-from weather_model import bucket_probability, classify_edge
+from datetime import datetime
+from weather_model import bucket_probability, classify_edge, suggested_bet_size
 
 
 # Washington, DC point forecast from api.weather.gov
@@ -23,7 +24,6 @@ def get_forecast_mean():
         if not periods:
             return None, None, "No forecast periods returned"
 
-        # first daytime period is usually today's high forecast
         day_period = None
         for p in periods:
             if p.get("isDaytime"):
@@ -40,7 +40,7 @@ def get_forecast_mean():
         if temp is None:
             return None, None, "No temperature in forecast"
 
-        # simple starter uncertainty
+        # more realistic starter uncertainty
         std = 4.0
 
         note = f"{name}: {temp}F, {short}"
@@ -52,6 +52,7 @@ def get_forecast_mean():
 
 def scan_weather():
     mean, std, forecast_note = get_forecast_mean()
+    scan_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
     if mean is None:
         return [{
@@ -60,6 +61,8 @@ def scan_weather():
             "kalshi_prob": "-",
             "edge": "-",
             "signal": "ERROR",
+            "suggested_bet": 0,
+            "scan_time": scan_time,
             "notes": forecast_note
         }]
 
@@ -74,6 +77,7 @@ def scan_weather():
         model_prob = bucket_probability(low, high, mean, std)
         edge = model_prob - kalshi_prob
         signal = classify_edge(edge, model_prob)
+        suggested_bet = suggested_bet_size(edge, bankroll=1000)
 
         rows.append({
             "bucket": b.get("label", b.get("bucket", "")),
@@ -81,6 +85,8 @@ def scan_weather():
             "kalshi_prob": round(kalshi_prob * 100, 1),
             "edge": round(edge * 100, 1),
             "signal": signal,
+            "suggested_bet": suggested_bet,
+            "scan_time": scan_time,
             "notes": forecast_note
         })
 

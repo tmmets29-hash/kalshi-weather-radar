@@ -10,45 +10,23 @@ BASE_URL = "https://api.elections.kalshi.com/trade-api/v2"
 
 
 def get_kalshi_markets(series):
-
-    markets = []
-
     try:
 
-        cursor = None
+        url = f"{BASE_URL}/series/{series}/markets"
 
-        while True:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
 
-            url = f"{BASE_URL}/markets?limit=200"
+        data = r.json()
 
-            if cursor:
-                url += f"&cursor={cursor}"
-
-            r = requests.get(url, timeout=15)
-            r.raise_for_status()
-
-            data = r.json()
-
-            batch = data.get("markets", [])
-            markets.extend(batch)
-
-            cursor = data.get("cursor")
-
-            if not cursor:
-                break
-
-            if len(markets) > 2000:
-                break
-
-        weather = [
-            m for m in markets
-            if m.get("ticker", "").startswith(series)
-        ]
-
-        return weather
+        return data.get("markets", [])
 
     except Exception as e:
-        return [{"title": f"API ERROR: {str(e)}"}]
+
+        return [{
+            "title": f"API ERROR: {str(e)}",
+            "ticker": "NO TICKER"
+        }]
 
 
 def scan_weather():
@@ -92,7 +70,7 @@ def scan_weather():
             "signal": "NO DATA",
             "suggested_bet": 0,
             "scan_time": scan_time,
-            "notes": "Series not found in first market pages"
+            "notes": "Series returned no markets"
         })
 
     return rows

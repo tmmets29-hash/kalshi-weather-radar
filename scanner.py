@@ -6,14 +6,14 @@ from weather_model import (
     classify_edge,
     suggested_bet_size,
     adjusted_temperature,
-    temperature_std
+    temperature_std,
 )
 
 CITIES = [
     {
         "name": "Washington DC",
         "series": "KXHIGHDC",
-        "forecast": "https://api.weather.gov/gridpoints/LWX/97,71/forecast"
+        "forecast": "https://api.weather.gov/gridpoints/LWX/97,71/forecast",
     }
 ]
 
@@ -22,6 +22,7 @@ def get_forecast(url):
     try:
         headers = {"User-Agent": "kalshi-weather-radar"}
         r = requests.get(url, headers=headers, timeout=15)
+        r.raise_for_status()
         data = r.json()
         periods = data["properties"]["periods"]
 
@@ -46,9 +47,9 @@ def get_kalshi_markets(series):
     try:
         url = f"https://api.kalshi.com/trade-api/v2/markets?series_ticker={series}&status=open"
         r = requests.get(url, timeout=15)
+        r.raise_for_status()
         data = r.json()
         return data.get("markets", [])
-
     except Exception:
         return []
 
@@ -88,7 +89,6 @@ def scan_weather():
             continue
 
         markets = get_kalshi_markets(city["series"])
-
         mean_temp = adjusted_temperature(city["name"], forecast_temp)
         std = temperature_std(city["name"])
 
@@ -104,7 +104,6 @@ def scan_weather():
             if yes_price is None:
                 continue
 
-            # old cent-based field fallback
             if isinstance(yes_price, (int, float)) and yes_price > 1:
                 yes_price = float(yes_price) / 100.0
 
@@ -120,30 +119,34 @@ def scan_weather():
             signal = classify_edge(edge, model_prob)
             bet_size = suggested_bet_size(edge)
 
-            rows.append({
-                "city": city["name"],
-                "bucket": title,
-                "model_prob": round(model_prob * 100, 1),
-                "kalshi_prob": round(kalshi_prob * 100, 1),
-                "edge": round(edge * 100, 1),
-                "signal": signal,
-                "suggested_bet": bet_size,
-                "scan_time": scan_time,
-                "notes": forecast_note
-            })
+            rows.append(
+                {
+                    "city": city["name"],
+                    "bucket": title,
+                    "model_prob": round(model_prob * 100, 1),
+                    "kalshi_prob": round(kalshi_prob * 100, 1),
+                    "edge": round(edge * 100, 1),
+                    "signal": signal,
+                    "suggested_bet": bet_size,
+                    "scan_time": scan_time,
+                    "notes": forecast_note,
+                }
+            )
 
     if not rows:
-        return [{
-            "city": "-",
-            "bucket": "No usable markets found",
-            "model_prob": "-",
-            "kalshi_prob": "-",
-            "edge": "-",
-            "signal": "NO DATA",
-            "suggested_bet": 0,
-            "scan_time": scan_time,
-            "notes": "Weather or Kalshi API returned nothing"
-        }]
+        return [
+            {
+                "city": "-",
+                "bucket": "No usable markets found",
+                "model_prob": "-",
+                "kalshi_prob": "-",
+                "edge": "-",
+                "signal": "NO DATA",
+                "suggested_bet": 0,
+                "scan_time": scan_time,
+                "notes": "Weather or Kalshi API returned nothing",
+            }
+        ]
 
     best = max(rows, key=lambda x: x["edge"])
     return [best]

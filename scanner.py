@@ -44,14 +44,12 @@ def get_forecast(url):
 
 def get_kalshi_markets(series):
     try:
-        url = "https://api.kalshi.com/trade-api/v2/markets?status=open"
+        url = f"https://api.kalshi.com/trade-api/v2/markets?series_ticker={series}"
         r = requests.get(url, timeout=15)
         r.raise_for_status()
         data = r.json()
-        markets = data.get("markets", [])
+        return data.get("markets", [])
 
-        # Filter only NYC high-temp markets
-        return [m for m in markets if series in m.get("ticker", "")]
     except Exception:
         return []
 

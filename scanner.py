@@ -45,17 +45,18 @@ def get_forecast(url):
 
 def get_kalshi_markets(series):
     try:
-        url = f"https://api.kalshi.com/trade-api/v2/markets?series_ticker={series}&status=open"
+        url = "https://api.kalshi.com/trade-api/v2/markets?status=open"
         r = requests.get(url, timeout=15)
         r.raise_for_status()
         data = r.json()
-        return data.get("markets", [])
+        markets = data.get("markets", [])
+        return [m for m in markets if m.get("series_ticker") == series]
     except Exception:
         return []
 
 
 def parse_bucket(title):
-    title = title.lower()
+    title = title.lower().strip()
 
     try:
         if "or below" in title:
@@ -68,8 +69,8 @@ def parse_bucket(title):
 
         if "-" in title:
             parts = title.split("-")
-            low = int(parts[0])
-            high = int(parts[1].split()[0])
+            low = int(parts[0].strip())
+            high = int(parts[1].split()[0].strip())
             return low, high
 
     except Exception:

@@ -1,1 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kalshi Weather Radar</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #07133a;
+      color: white;
+      padding: 20px;
+      margin: 0;
+    }
+    h1 {
+      margin-top: 40px;
+      font-size: 40px;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      font-size: 18px;
+      opacity: 0.8;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #3b6df6;
+      color: white;
+      border: none;
+      border-radius: 18px;
+      padding: 20px 28px;
+      font-size: 22px;
+      font-weight: 600;
+      margin: 24px 0;
+      width: 320px;
+      max-width: 100%;
+    }
+    #status {
+      margin: 10px 0 20px 0;
+      font-size: 16px;
+      opacity: 0.9;
+    }
+    .card {
+      background: #1a234f;
+      border-radius: 20px;
+      padding: 22px;
+      margin-bottom: 18px;
+    }
+    .obvious {
+      background: #0d4027;
+      border: 2px solid #43e28d;
+    }
+    .bet {
+      background: #133d2a;
+      border: 2px solid #2bd97f;
+    }
+    .watch {
+      background: #4b3a12;
+      border: 2px solid #c9a227;
+    }
+    .pass {
+      background: #3b1d22;
+      border: 2px solid #6b2a35;
+    }
+    .bucket {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .meta {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    .notes {
+      font-size: 15px;
+      opacity: 0.8;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Kalshi Weather Radar</h1>
+  <div class="subtitle">Washington, DC daily high temperature buckets</div>
 
+  <button id="scanButton">Refresh Scan</button>
+
+  <div id="status">Tap refresh to scan.</div>
+  <div id="results"></div>
+
+  <script>
+    async function scan() {
+      const status = document.getElementById("status");
+      const results = document.getElementById("results");
+
+      status.textContent = "Scanning...";
+      results.innerHTML = "";
+
+      try {
+        const res = await fetch("/scan");
+
+        if (!res.ok) {
+          status.textContent = "Error: /scan returned " + res.status;
+          return;
+        }
+
+        const data = await res.json();
+
+        if (!Array.isArray(data)) {
+          status.textContent = "Error: /scan did not return a list.";
+          return;
+        }
+
+        if (data.length === 0) {
+          status.textContent = "No results came back.";
+          return;
+        }
+
+        status.textContent = "Found " + data.length + " buckets.";
+
+        data.forEach(item => {
+          const card = document.createElement("div");
+          const sig = (item.signal || "").toUpperCase();
+
+          let cls = "card pass";
+          if (sig === "OBVIOUS BET") cls = "card obvious";
+          else if (sig === "BET") cls = "card bet";
+          else if (sig === "WATCH") cls = "card watch";
+
+          card.className = cls;
+
+          card.innerHTML = `
+            <div class="bucket">${item.bucket ?? "-"}</div>
+            <div class="meta">Model Prob: <strong>${item.model_prob ?? "-"}</strong>%</div>
+            <div class="meta">Kalshi Implied: <strong>${item.kalshi_prob ?? "-"}</strong>%</div>
+            <div class="meta">Edge: <strong>${item.edge ?? "-"}</strong>%</div>
+            <div class="meta">Signal: <strong>${item.signal ?? "-"}</strong></div>
+            <div class="notes">${item.notes ?? ""}</div>
+          `;
+
+          results.appendChild(card);
+        });
+      } catch (err) {
+        status.textContent = "JS / network error: " + err;
+      }
+    }
+
+    document.getElementById("scanButton").addEventListener("click", scan);
+  </script>
+</body>
+</html>

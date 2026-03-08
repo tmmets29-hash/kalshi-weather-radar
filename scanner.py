@@ -62,6 +62,9 @@ def get_forecast(url):
 
                 name = p.get("name", "")
 
+                if temp is None:
+                    return None, "No temperature"
+
                 return float(temp), f"{name}: {temp}F, {short}"
 
         return None, "No daytime forecast"
@@ -94,27 +97,33 @@ def parse_bucket(title):
 
     title = title.lower()
 
-    if "or below" in title:
+    try:
 
-        num = int(title.split()[0])
+        if "or below" in title:
 
-        return None, num
+            num = int(title.split()[0])
 
-    if "or above" in title:
+            return None, num
 
-        num = int(title.split()[0])
+        if "or above" in title:
 
-        return num, None
+            num = int(title.split()[0])
 
-    if "-" in title:
+            return num, None
 
-        parts = title.split("-")
+        if "-" in title:
 
-        low = int(parts[0])
+            parts = title.split("-")
 
-        high = int(parts[1].split()[0])
+            low = int(parts[0])
 
-        return low, high
+            high = int(parts[1].split()[0])
+
+            return low, high
+
+    except:
+
+        pass
 
     return None, None
 
@@ -143,6 +152,9 @@ def scan_weather():
             yes_price = m.get("yes_ask_dollars")
 
             if yes_price is None:
+                yes_price = m.get("yes_bid_dollars")
+
+            if yes_price is None:
                 continue
 
             low, high = parse_bucket(title)
@@ -160,21 +172,13 @@ def scan_weather():
             rows.append({
 
                 "city": city["name"],
-
                 "bucket": title,
-
                 "model_prob": round(model_prob * 100, 1),
-
                 "kalshi_prob": round(kalshi_prob * 100, 1),
-
                 "edge": round(edge * 100, 1),
-
                 "signal": signal,
-
                 "suggested_bet": bet_size,
-
                 "scan_time": scan_time,
-
                 "notes": forecast_note
 
             })

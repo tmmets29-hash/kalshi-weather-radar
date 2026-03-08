@@ -1,1 +1,7 @@
-
+[
+  { "bucket": "67_or_below", "label": "67° or below", "low": null, "high": 67, "kalshi_prob": 0.08 },
+  { "bucket": "68_69", "label": "68° to 69°", "low": 68, "high": 69, "kalshi_prob": 0.14 },
+  { "bucket": "70_71", "label": "70° to 71°", "low": 70, "high": 71, "kalshi_prob": 0.31 },
+  { "bucket": "72_73", "label": "72° to 73°", "low": 72, "high": 73, "kalshi_prob": 0.28 },
+  { "bucket": "74_or_above", "label": "74° or above", "low": 74, "high": null, "kalshi_prob": 0.19 }
+]

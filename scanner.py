@@ -9,17 +9,31 @@ CITY = {
 BASE_URL = "https://api.elections.kalshi.com/trade-api/v2"
 
 
-def get_kalshi_markets(series):
+def get_weather_markets(series):
+
     try:
 
-        url = f"{BASE_URL}/series/{series}/markets"
+        url = f"{BASE_URL}/events"
 
         r = requests.get(url, timeout=15)
         r.raise_for_status()
 
         data = r.json()
 
-        return data.get("markets", [])
+        events = data.get("events", [])
+
+        weather_events = [
+            e for e in events
+            if e.get("event_ticker","").startswith(series)
+        ]
+
+        markets = []
+
+        for event in weather_events:
+
+            markets.extend(event.get("markets", []))
+
+        return markets
 
     except Exception as e:
 
@@ -33,7 +47,7 @@ def scan_weather():
 
     scan_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
-    markets = get_kalshi_markets(CITY["series"])
+    markets = get_weather_markets(CITY["series"])
 
     rows = []
 

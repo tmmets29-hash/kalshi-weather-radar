@@ -73,7 +73,7 @@ def scan_weather():
 
         model_prob = bucket_probability(low, high, mean, std)
         edge = model_prob - kalshi_prob
-        signal = classify_edge(edge)
+        signal = classify_edge(edge, model_prob)
 
         rows.append({
             "bucket": b.get("label", b.get("bucket", "")),

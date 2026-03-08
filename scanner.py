@@ -44,30 +44,15 @@ def get_forecast(url):
 
 def get_kalshi_markets(series):
     try:
-        # Step 1: get events for the weather series
-        url = f"https://api.kalshi.com/trade-api/v2/events?series_ticker={series}"
+        url = "https://api.kalshi.com/trade-api/v2/markets?status=open&limit=1000"
         r = requests.get(url, timeout=15)
         r.raise_for_status()
         data = r.json()
 
-        events = data.get("events", [])
-        if not events:
-            return []
+        markets = data.get("markets", [])
 
-        markets = []
-
-        # Step 2: fetch markets for each event
-        for e in events:
-            event_ticker = e.get("event_ticker")
-
-            m_url = f"https://api.kalshi.com/trade-api/v2/events/{event_ticker}"
-            m = requests.get(m_url, timeout=15)
-            m.raise_for_status()
-            m_data = m.json()
-
-            markets.extend(m_data.get("markets", []))
-
-        return markets
+        # Filter weather markets for this city
+        return [m for m in markets if m.get("ticker", "").startswith(series)]
 
     except Exception:
         return []

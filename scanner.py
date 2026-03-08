@@ -1,43 +1,45 @@
 import requests
 from datetime import datetime
-from weather_model import bucket_probability, classify_edge, suggested_bet_size
 
+from weather_model import (
+    bucket_probability,
+    classify_edge,
+    suggested_bet_size,
+    adjusted_temperature,
+    temperature_std
+)
 
+# Cities we track
 CITIES = [
-
 {
 "name": "New York",
 "series": "KXHIGHNY",
 "forecast": "https://api.weather.gov/gridpoints/OKX/33,35/forecast"
 },
-
 {
 "name": "Washington DC",
 "series": "KXHIGHDC",
 "forecast": "https://api.weather.gov/gridpoints/LWX/97,71/forecast"
 },
-
 {
 "name": "Chicago",
 "series": "KXHIGHCHI",
 "forecast": "https://api.weather.gov/gridpoints/LOT/76,73/forecast"
 },
-
 {
 "name": "Dallas",
 "series": "KXHIGHDAL",
 "forecast": "https://api.weather.gov/gridpoints/FWD/97,58/forecast"
 },
-
 {
 "name": "Phoenix",
 "series": "KXHIGHPHX",
 "forecast": "https://api.weather.gov/gridpoints/PSR/99,76/forecast"
 }
-
 ]
 
 
+# Get NOAA forecast temperature
 def get_forecast(url):
 
     try:
@@ -50,20 +52,17 @@ def get_forecast(url):
 
         data = r.json()
 
-        periods = data.get("properties", {}).get("periods", [])
+        periods = data["properties"]["periods"]
 
         for p in periods:
 
-            if p.get("isDaytime"):
+            if p["isDaytime"]:
 
-                temp = p.get("temperature")
+                temp = p["temperature"]
 
-                short = p.get("shortForecast", "")
+                short = p["shortForecast"]
 
-                name = p.get("name", "")
-
-                if temp is None:
-                    return None, "No temperature"
+                name = p["name"]
 
                 return float(temp), f"{name}: {temp}F, {short}"
 
@@ -74,6 +73,7 @@ def get_forecast(url):
         return None, str(e)
 
 
+# Get Kalshi markets
 def get_kalshi_markets(series):
 
     try:
@@ -88,11 +88,12 @@ def get_kalshi_markets(series):
 
         return data.get("markets", [])
 
-    except Exception:
+    except:
 
         return []
 
 
+# Convert bucket title to numeric range
 def parse_bucket(title):
 
     title = title.lower()
@@ -130,20 +131,24 @@ def parse_bucket(title):
 
 def scan_weather():
 
-    scan_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-
     rows = []
+
+    scan_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
     for city in CITIES:
 
-        mean_temp, forecast_note = get_forecast(city["forecast"])
+        forecast_temp, forecast_note = get_forecast(city["forecast"])
 
-        if mean_temp is None:
+        if forecast_temp is None:
             continue
 
         markets = get_kalshi_markets(city["series"])
 
-        std = 4.0
+        # Apply bias correction
+        mean_temp = adjusted_temperature(city["name"], forecast_temp)
+
+        # City volatility
+        std = temperature_std(city["name"])
 
         for m in markets:
 
@@ -197,8 +202,21 @@ def scan_weather():
             "notes": "Kalshi or weather API returned nothing"
         }]
 
-    rank = {"OBVIOUS BET": 4, "BET": 3, "WATCH": 2, "PASS": 1}
+    # Pick best bet per city
+    best_by_city = {}
 
-    rows.sort(key=lambda x: (rank.get(x["signal"], 0), x["edge"]), reverse=True)
+    for r in rows:
 
-    return rows[:10]
+        city = r["city"]
+
+        if city not in best_by_city:
+
+            best_by_city[city] = r
+
+            continue
+
+        if r["edge"] > best_by_city[city]["edge"]:
+
+            best_by_city[city] = r
+
+    return list(best_by_city.values())

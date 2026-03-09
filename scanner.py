@@ -10,13 +10,16 @@ PATH = "/trade-api/v2/markets?series_ticker=KXHIGHNY"
 
 API_KEY = os.getenv("KALSHI_API_KEY")
 
-with open("/etc/secrets/kalshi_private_key.pem", "rb") as f:
-    PRIVATE_KEY = serialization.load_pem_private_key(f.read(), password=None)
 
-def sign_request(timestamp, method, path):
+def load_private_key():
+    with open("/etc/secrets/kalshi_private_key.pem", "rb") as f:
+        return serialization.load_pem_private_key(f.read(), password=None)
+
+
+def sign_request(private_key, timestamp, method, path):
     message = f"{timestamp}{method}{path}".encode()
 
-    signature = PRIVATE_KEY.sign(
+    signature = private_key.sign(
         message,
         padding.PSS(
             mgf=padding.MGF1(hashes.SHA256()),
@@ -27,56 +30,77 @@ def sign_request(timestamp, method, path):
 
     return base64.b64encode(signature).decode()
 
+
 def get_weather_markets():
+    try:
 
-    timestamp = str(int(time.time() * 1000))
-    method = "GET"
+        private_key = load_private_key()
 
-    signature = sign_request(timestamp, method, PATH)
+        timestamp = str(int(time.time() * 1000))
+        method = "GET"
 
-    headers = {
-        "KALSHI-ACCESS-KEY": API_KEY,
-        "KALSHI-ACCESS-SIGNATURE": signature,
-        "KALSHI-ACCESS-TIMESTAMP": timestamp,
-        "Content-Type": "application/json",
-    }
+        signature = sign_request(private_key, timestamp, method, PATH)
 
-    url = BASE_URL + PATH
+        headers = {
+            "KALSHI-ACCESS-KEY": API_KEY,
+            "KALSHI-ACCESS-SIGNATURE": signature,
+            "KALSHI-ACCESS-TIMESTAMP": timestamp,
+            "Content-Type": "application/json",
+        }
 
-    r = requests.get(url, headers=headers, timeout=20)
-    r.raise_for_status()
+        r = requests.get(BASE_URL + PATH, headers=headers, timeout=20)
 
-    data = r.json()
+        r.raise_for_status()
 
-    return data.get("markets", [])
+        data = r.json()
+
+        return data.get("markets", [])
+
+    except Exception as e:
+        return [{"error": str(e)}]
+
 
 def scan_weather():
 
     markets = get_weather_markets()
+
     results = []
 
     for m in markets:
+
+        if "error" in m:
+            return [{
+                "city": "Error",
+                "bucket": m["error"],
+                "model_prob": "-",
+                "kalshi_prob": "-",
+                "edge": "-",
+                "signal": "ERROR",
+                "suggested_bet": 0,
+                "notes": "scanner crash"
+            }]
+
         results.append({
             "city": "New York",
             "bucket": m.get("title"),
-            "kalshi_prob": m.get("yes_price", "-"),
             "model_prob": "-",
+            "kalshi_prob": m.get("yes_price", "-"),
             "edge": "-",
             "signal": "DEBUG",
             "suggested_bet": 0,
-            "notes": m.get("ticker"),
+            "notes": m.get("ticker")
         })
 
     if not results:
         results.append({
             "city": "New York",
             "bucket": "No weather markets found",
-            "kalshi_prob": "-",
             "model_prob": "-",
+            "kalshi_prob": "-",
             "edge": "-",
             "signal": "NO DATA",
             "suggested_bet": 0,
-            "notes": "No markets returned",
+            "notes": "empty result"
         })
 
     return results

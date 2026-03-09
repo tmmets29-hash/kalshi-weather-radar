@@ -5,30 +5,11 @@ import requests
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
-BASE_URL = "https://trading-api.kalshi.com"
-PATH = "/trade-api/v2/markets?series_ticker=KXHIGHNY"
+BASE_URL = "https://api.elections.kalshi.com"
+REQUEST_PATH = "/trade-api/v2/markets"
+QUERY = "series_ticker=KXHIGHNY&status=all&limit=1000"
 
 API_KEY = os.getenv("KALSHI_API_KEY")
-
-
-def load_private_key():
-    with open("/etc/secrets/kalshi_private_key.pem", "rb") as f:
-        return serialization.load_pem_private_key(f.read(), password=None)
-
-
-def sign_request(private_key, timestamp, method, path):
-    message = f"{timestamp}{method}{path}".encode()
-
-    signature = private_key.sign(
-        message,
-        padding.PSS(
-            mgf=padding.MGF1(hashes.SHA256()),
-            salt_length=padding.PSS.DIGEST_LENGTH,
-        ),
-        hashes.SHA256(),
-    )
-
-    return base64.b64encode(signature).decode()
 
 
 def format_row(city, bucket, model_prob="-", kalshi_prob="-", edge="-",
@@ -45,6 +26,26 @@ def format_row(city, bucket, model_prob="-", kalshi_prob="-", edge="-",
     }
 
 
+def load_private_key():
+    with open("/etc/secrets/kalshi_private_key.pem", "rb") as f:
+        return serialization.load_pem_private_key(f.read(), password=None)
+
+
+def sign_request(private_key, timestamp, method, path_without_query):
+    message = f"{timestamp}{method}{path_without_query}".encode()
+
+    signature = private_key.sign(
+        message,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.DIGEST_LENGTH,
+        ),
+        hashes.SHA256(),
+    )
+
+    return base64.b64encode(signature).decode()
+
+
 def get_weather_markets():
     try:
         if not API_KEY:
@@ -58,27 +59,26 @@ def get_weather_markets():
         private_key = load_private_key()
 
         timestamp = str(int(time.time() * 1000))
-        method = "GET"
-
-        signature = sign_request(private_key, timestamp, method, PATH)
+        signature = sign_request(private_key, timestamp, "GET", REQUEST_PATH)
 
         headers = {
             "KALSHI-ACCESS-KEY": API_KEY,
             "KALSHI-ACCESS-SIGNATURE": signature,
             "KALSHI-ACCESS-TIMESTAMP": timestamp,
+            "Accept": "application/json",
             "Content-Type": "application/json",
         }
 
-        r = requests.get(BASE_URL + PATH, headers=headers, timeout=20)
+        url = f"{BASE_URL}{REQUEST_PATH}?{QUERY}"
+        r = requests.get(url, headers=headers, timeout=20)
         r.raise_for_status()
 
         data = r.json()
         markets = data.get("markets", [])
 
-        results = []
-
+        rows = []
         for m in markets:
-            results.append(format_row(
+            rows.append(format_row(
                 city="New York",
                 bucket=m.get("title", "NO TITLE"),
                 kalshi_prob=(
@@ -89,19 +89,18 @@ def get_weather_markets():
                     or m.get("yes_bid_dollars")
                     or "-"
                 ),
-                signal="DEBUG",
                 notes=m.get("ticker", "NO TICKER")
             ))
 
-        if not results:
-            results.append(format_row(
+        if not rows:
+            rows.append(format_row(
                 city="New York",
                 bucket="No weather markets found",
                 signal="NO DATA",
                 notes="empty result"
             ))
 
-        return results
+        return rows
 
     except Exception as e:
         return [format_row(

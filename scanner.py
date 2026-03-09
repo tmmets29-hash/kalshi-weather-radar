@@ -31,8 +31,29 @@ def sign_request(private_key, timestamp, method, path):
     return base64.b64encode(signature).decode()
 
 
+def format_row(city, bucket, model_prob="-", kalshi_prob="-", edge="-",
+               signal="DEBUG", suggested_bet=0, notes=""):
+    return {
+        "city": city,
+        "bucket": bucket,
+        "model_prob": model_prob,
+        "kalshi_prob": kalshi_prob,
+        "edge": edge,
+        "signal": signal,
+        "suggested_bet": suggested_bet,
+        "notes": notes,
+    }
+
+
 def get_weather_markets():
     try:
+        if not API_KEY:
+            return [format_row(
+                city="Scanner Error",
+                bucket="Missing KALSHI_API_KEY",
+                signal="ERROR",
+                notes="env var missing"
+            )]
 
         private_key = load_private_key()
 
@@ -49,58 +70,47 @@ def get_weather_markets():
         }
 
         r = requests.get(BASE_URL + PATH, headers=headers, timeout=20)
-
         r.raise_for_status()
 
         data = r.json()
+        markets = data.get("markets", [])
 
-        return data.get("markets", [])
+        results = []
+
+        for m in markets:
+            results.append(format_row(
+                city="New York",
+                bucket=m.get("title", "NO TITLE"),
+                kalshi_prob=(
+                    m.get("yes_price")
+                    or m.get("yes_ask")
+                    or m.get("yes_bid")
+                    or m.get("yes_ask_dollars")
+                    or m.get("yes_bid_dollars")
+                    or "-"
+                ),
+                signal="DEBUG",
+                notes=m.get("ticker", "NO TICKER")
+            ))
+
+        if not results:
+            results.append(format_row(
+                city="New York",
+                bucket="No weather markets found",
+                signal="NO DATA",
+                notes="empty result"
+            ))
+
+        return results
 
     except Exception as e:
-        return [{"error": str(e)}]
+        return [format_row(
+            city="Scanner Error",
+            bucket=str(e),
+            signal="ERROR",
+            notes="scanner exception"
+        )]
 
 
 def scan_weather():
-
-    markets = get_weather_markets()
-
-    results = []
-
-    for m in markets:
-
-        if "error" in m:
-            return [{
-                "city": "Error",
-                "bucket": m["error"],
-                "model_prob": "-",
-                "kalshi_prob": "-",
-                "edge": "-",
-                "signal": "ERROR",
-                "suggested_bet": 0,
-                "notes": "scanner crash"
-            }]
-
-        results.append({
-            "city": "New York",
-            "bucket": m.get("title"),
-            "model_prob": "-",
-            "kalshi_prob": m.get("yes_price", "-"),
-            "edge": "-",
-            "signal": "DEBUG",
-            "suggested_bet": 0,
-            "notes": m.get("ticker")
-        })
-
-    if not results:
-        results.append({
-            "city": "New York",
-            "bucket": "No weather markets found",
-            "model_prob": "-",
-            "kalshi_prob": "-",
-            "edge": "-",
-            "signal": "NO DATA",
-            "suggested_bet": 0,
-            "notes": "empty result"
-        })
-
-    return results
+    return get_weather_markets()
